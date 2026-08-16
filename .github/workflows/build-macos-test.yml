@@ -1,0 +1,45 @@
+name: Build macOS test packages
+
+on:
+  push:
+    branches: [codex/mac-build-artifacts]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            arch: arm64
+            script: dist:mac
+          - os: macos-15-intel
+            arch: x64
+            script: dist:mac:x64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Build unsigned macOS package
+        run: npm run ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          TOKEN_MONITOR_WIDGET_ENABLED: '0'
+      - name: Record checksums
+        run: shasum -a 256 dist/*.dmg dist/*.zip > dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: token-monitor-mac-${{ matrix.arch }}-unsigned
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/SHA256SUMS.txt
