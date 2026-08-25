@@ -30,7 +30,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Build unsigned private macOS artifacts
-        run: npm run ${{ matrix.dist_script }}
+        run: npm run ${{ matrix.dist_script }} -- --config.mac.forceCodeSigning=false
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           TOKEN_MONITOR_WIDGET_ENABLED: '0'
