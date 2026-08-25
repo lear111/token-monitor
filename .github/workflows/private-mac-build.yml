@@ -29,11 +29,35 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: Build unsigned private macOS artifacts
-        run: npm run ${{ matrix.dist_script }} -- --config.mac.forceCodeSigning=false
+      - name: Build ad-hoc signed private macOS artifacts
+        run: npm run ${{ matrix.dist_script }} -- --config.mac.identity=-
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           TOKEN_MONITOR_WIDGET_ENABLED: '0'
+      - name: Verify private macOS installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg_path=$(find dist -maxdepth 1 -name "*-${{ matrix.arch }}.dmg" -print -quit)
+          if [ -z "$dmg_path" ]; then
+            echo "No ${{ matrix.arch }} DMG found" >&2
+            exit 1
+          fi
+          hdiutil verify "$dmg_path"
+          mount_dir=$(mktemp -d)
+          cleanup() {
+            hdiutil detach "$mount_dir" >/dev/null 2>&1 || true
+            rmdir "$mount_dir" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "$dmg_path"
+          app_path=$(find "$mount_dir" -maxdepth 1 -name '*.app' -print -quit)
+          if [ -z "$app_path" ]; then
+            echo "No application bundle found in $dmg_path" >&2
+            exit 1
+          fi
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          codesign -dv --verbose=4 "$app_path" 2>&1 | grep -q 'Signature=adhoc'
       - name: Upload private macOS artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
